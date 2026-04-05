@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kerala 2026 Election Prediction — Seat Forecast</title>
+  <meta name="description" content="Data-driven seat forecast for the 2026 Kerala Legislative Assembly elections using ensemble modeling and public survey data across all 140 constituencies.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f5f0eb;
+      --bg-card: #ffffff;
+      --bg-card-hover: #fafaf8;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --border: #e0dcd7;
+      --border-light: #eae6e1;
+      --ldf: #d32f2f;
+      --ldf-bg: #fce4e4;
+      --udf: #1565c0;
+      --udf-bg: #e3eefa;
+      --nda: #e67e22;
+      --nda-bg: #fef3e2;
+      --safe-bg: #dcfce7;
+      --safe-text: #166534;
+      --lean-bg: #fef9c3;
+      --lean-text: #854d0e;
+      --tossup-bg: #fee2e2;
+      --tossup-text: #991b1b;
+      --gold: #b8860b;
+      --accent: #d4a843;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+      --radius: 10px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    .site-header {
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2520 100%);
+      color: white;
+      padding: 32px 0;
+      border-bottom: 3px solid var(--gold);
+    }
+    .header-inner { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .header-icon { font-size: 2.5rem; }
+    .header-text h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; }
+    .header-text h1 em { color: var(--accent); font-style: normal; }
+    .header-text p { color: #b0a89e; font-size: 0.9rem; margin-top: 4px; }
+
+    /* Method Card */
+    .method-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-top: 28px;
+      box-shadow: var(--shadow);
+    }
+    .method-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .method-icon { font-size: 2rem; }
+    .method-name { font-size: 1.3rem; font-weight: 700; color: var(--gold); }
+    .method-desc { color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; }
+
+    /* Tally */
+    .tally-section { margin-top: 28px; }
+    .tally-section h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 16px; }
+    .tally-bar {
+      display: flex;
+      height: 52px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    .tally-seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: white;
+      transition: flex 0.4s ease;
+    }
+    .tally-seg.ldf { background: var(--ldf); }
+    .tally-seg.udf { background: var(--udf); }
+    .tally-seg.nda { background: var(--nda); }
+    .majority-line {
+      position: absolute;
+      left: calc(71 / 140 * 100%);
+      top: 0; bottom: 0;
+      width: 2px;
+      background: repeating-linear-gradient(to bottom, #333 0, #333 4px, transparent 4px, transparent 8px);
+      z-index: 2;
+    }
+    .majority-label {
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .tally-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .tally-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .tally-card.ldf { background: var(--ldf-bg); border-color: #f3b4b4; }
+    .tally-card.udf { background: var(--udf-bg); border-color: #b4c9f3; }
+    .tally-card.nda { background: var(--nda-bg); border-color: #f3d4a8; }
+    .tc-label { font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tc-label.ldf { color: var(--ldf); }
+    .tc-label.udf { color: var(--udf); }
+    .tc-label.nda { color: var(--nda); }
+    .tc-num { font-size: 2.8rem; font-weight: 900; }
+    .tc-detail { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+
+    /* Map + Card Section */
+    .map-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 28px;
+    }
+    .map-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    .map-wrap h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; }
+    #map-container svg { width: 100%; height: auto; }
+    #map-container path { cursor: pointer; transition: opacity 0.2s, stroke-width 0.2s, fill 0.3s; }
+    #map-container path:hover { opacity: 1 !important; stroke: #ffd700 !important; stroke-width: 0.012 !important; filter: brightness(1.15); }
+    .map-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .map-legend-item { display: flex; align-items: center; gap: 5px; }
+    .map-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+    #map-tooltip {
+      position: fixed;
+      display: none;
+      background: #1a1a1a;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      pointer-events: none;
+      z-index: 999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      white-space: nowrap;
+    }
+
+    /* Constituency Card */
+    .card-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      max-height: 680px;
+      overflow-y: auto;
+    }
+    .card-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 400px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 20px;
+    }
+    .card-placeholder .cp-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+    .card-placeholder .cp-text { font-size: 0.9rem; }
+    .card-content { padding: 24px; }
+    .cc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .cc-name-row { display: flex; align-items: baseline; gap: 8px; }
+    .cc-number {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      background: var(--border-light);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .cc-name { font-size: 1.4rem; font-weight: 800; }
+    .cc-district { color: var(--text-muted); font-size: 0.8rem; }
+    .cc-badge {
+      padding: 4px 14px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: white;
+    }
+    .cc-close {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    /* Vote Bars */
+    .cc-votes { margin: 16px 0; }
+    .cc-vote-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .cc-vote-label { font-weight: 600; font-size: 0.78rem; width: 30px; }
+    .cc-vote-bar-bg { flex: 1; height: 20px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+    .cc-vote-bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .cc-vote-pct { font-family: 'DM Mono', monospace; font-size: 0.78rem; width: 50px; text-align: right; }
+    .cc-meta {
+      display: flex;
+      gap: 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* History */
+    .cc-section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      margin-top: 14px;
+    }
+    .history-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 0.78rem; }
+    .history-year { color: var(--text-muted); }
+    .history-pill {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.72rem;
+      color: white;
+    }
+    .history-sep { color: var(--border); margin: 0 4px; }
+
+    /* Survey section in card */
+    .survey-section {
+      margin-top: 14px;
+      padding: 14px;
+      background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+      border-radius: 8px;
+      border: 1px solid #fde68a;
+    }
+    .survey-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .survey-name { font-weight: 600; font-size: 0.88rem; }
+    .survey-badge {
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: white;
+    }
+    .survey-stats { display: flex; gap: 16px; }
+    .survey-stat { text-align: center; }
+    .survey-stat-val { font-weight: 800; font-size: 1.1rem; display: block; }
+    .survey-stat-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+    .survey-bar-bg { height: 6px; background: #e5e7eb; border-radius: 3px; margin-top: 10px; }
+    .survey-bar { height: 100%; border-radius: 3px; transition: width 0.5s; }
+
+    /* Swing/Tossup */
+    .swing-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 28px;
+    }
+    .swing-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .swing-card h3 {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .swing-count { font-size: 2rem; font-weight: 900; }
+    .swing-subtitle { color: var(--text-muted); font-size: 0.78rem; margin-bottom: 12px; }
+    .swing-list {
+      max-height: 240px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border-light);
+    }
+    .swing-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      font-size: 0.82rem;
+    }
+    .swing-item:hover { background: var(--bg-card-hover); }
+    .swing-dir { font-weight: 600; font-size: 0.75rem; }
+
+    /* Table */
+    .table-section { margin-top: 28px; }
+    .table-section h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    .filters input, .filters select {
+      font-family: inherit;
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+    }
+    .filters input { flex: 1; min-width: 200px; }
+    .count-label { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
+    .pred-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .pred-table thead { background: #f7f3ef; }
+    .pred-table th {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 12px;
+      text-align: left;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .pred-table th:hover { color: var(--text); }
+    .pred-table td { padding: 10px 12px; border-top: 1px solid var(--border-light); font-size: 0.82rem; }
+    .pred-table tr { cursor: pointer; transition: background 0.15s; }
+    .pred-table tbody tr:hover { background: var(--bg-card-hover); }
+    .pred-table tbody tr.active-row { background: #fef3c7; }
+    .pred-table .ct-badge {
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.72rem;
+      color: white;
+    }
+    .conf-badge { 
+      padding: 2px 8px; 
+      border-radius: 4px; 
+      font-size: 0.7rem; 
+      font-weight: 600; 
+    }
+    .conf-safe { background: var(--safe-bg); color: var(--safe-text); }
+    .conf-lean { background: var(--lean-bg); color: var(--lean-text); }
+    .conf-tossup { background: var(--tossup-bg); color: var(--tossup-text); }
+    .mini-bars { display: flex; height: 14px; width: 120px; border-radius: 3px; overflow: hidden; }
+    .mini-bar { height: 100%; }
+
+    /* District Breakdown */
+    .district-section { margin-top: 28px; }
+    .district-section h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 14px; }
+    .district-grid {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .district-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 30px;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-light);
+      font-size: 0.82rem;
+    }
+    .district-name { font-weight: 600; }
+    .district-bar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; }
+    .district-bar-seg { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: white; }
+    .district-total { font-family: 'DM Mono', monospace; color: var(--text-muted); font-size: 0.75rem; }
+
+    /* Footer */
+    .site-footer {
+      background: #1a1a1a;
+      color: #b0a89e;
+      padding: 32px 0;
+      margin-top: 40px;
+      font-size: 0.82rem;
+    }
+    .footer-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .footer-links a { color: var(--accent); text-decoration: none; margin-left: 16px; }
+    .footer-links a:hover { text-decoration: underline; }
+
+    @media (max-width: 768px) {
+      .map-section { grid-template-columns: 1fr; }
+      .swing-section { grid-template-columns: 1fr; }
+      .tally-cards { grid-template-columns: 1fr; }
+      .header-text h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="header-icon">🗳️</div>
+      <div class="header-text">
+        <h1>Kerala <em>2026</em> — Seat Forecast</h1>
+        <p>Data-driven election prediction across all 140 constituencies using ensemble modeling &amp; public survey</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="method-card">
+      <div class="method-header">
+        <div class="method-icon">⭐</div>
+        <div class="method-name">Combined Final Prediction</div>
+      </div>
+      <p class="method-desc" id="method-desc"></p>
+    </div>
+
+    <section class="tally-section" id="tally-section"></section>
+
+    <section class="map-section">
+      <div class="map-wrap">
+        <h2>Constituency Map</h2>
+        <div id="map-container"></div>
+        <div class="map-legend">
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:var(--ldf)"></div> LDF</div>
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:var(--udf)"></div> UDF</div>
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:var(--nda)"></div> NDA</div>
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:#888;opacity:0.9"></div> Safe</div>
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:#888;opacity:0.6"></div> Lean</div>
+          <div class="map-legend-item"><div class="map-legend-dot" style="background:#888;opacity:0.35"></div> Toss-up</div>
+        </div>
+      </div>
+      <div class="card-wrap" id="card-wrap">
+        <div class="card-placeholder">
+          <div class="cp-icon">🗺️</div>
+          <div class="cp-text">Click a constituency on the map or table to see detailed prediction</div>
+        </div>
+      </div>
+    </section>
+
+    <div id="map-tooltip"></div>
+
+    <section class="swing-section" id="swing-section"></section>
+    <section class="table-section" id="table-section"></section>
+    <section class="district-section" id="district-section"></section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>Kerala 2026 Election Prediction</strong> · Methodology: Ensemble Model + Reporter TV Public Survey
+        <br>This is a data-driven projection, not a poll. Actual results may vary.
+      </div>
+      <div class="footer-links">
+        <a href="https://reportertv.in" target="_blank">Reporter TV Survey ↗</a>
+        <a href="https://data.opendatakerala.org" target="_blank">OpenDataKerala ↗</a>
+        <a href="https://github.com/AshwinKumarBV/KLA2026" target="_blank">KLA2026 Project ↗</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const AC = { LDF: '#d32f2f', UDF: '#1565c0', NDA: '#e67e22' };
+    const CONF_CLS = { Safe: 'conf-safe', Lean: 'conf-lean', 'Toss-up': 'conf-tossup' };
+    const OPC = { Safe: 0.95, Lean: 0.65, 'Toss-up': 0.38 };
+    let predictions = [];
+    let summary = {};
+    let selected = null;
+    let sortKey = 'number';
+    let sortAsc = true;
+    let filterAlliance = 'All';
+    let filterConf = 'All';
+    let filterDistrict = 'All';
+    let searchQ = '';
+    let predByQid = {};
+
+    async function init() {
+      const res = await fetch('data/predictions.json');
+      const data = await res.json();
+      predictions = data.predictions;
+      summary = data.summary;
+      document.getElementById('method-desc').textContent = data.description;
+
+      predByQid = {};
+      for (const p of predictions) { if (p.qid) predByQid[p.qid] = p; }
+
+      renderTally();
+      renderSwing();
+      renderTable();
+      renderDistricts();
+      await loadMap();
+    }
+
+    function renderTally() {
+      const t = summary.seat_tally;
+      const bc = summary.by_confidence;
+      const el = document.getElementById('tally-section');
+      el.innerHTML = `
+        <h2>Seat Forecast</h2>
+        <div class="tally-bar">
+          <div class="tally-seg ldf" style="flex:${t.LDF}">${t.LDF}</div>
+          <div class="tally-seg udf" style="flex:${t.UDF}">${t.UDF}</div>
+          <div class="tally-seg nda" style="flex:${Math.max(t.NDA, 1)}">${t.NDA}</div>
+          <div class="majority-line"></div>
+        </div>
+        <div class="majority-label">71 Majority</div>
+        <div class="tally-cards">
+          ${['LDF','UDF','NDA'].map(a => `
+            <div class="tally-card ${a.toLowerCase()}">
+              <div class="tc-label ${a.toLowerCase()}">${a}</div>
+              <div class="tc-num">${t[a]}</div>
+              <div class="tc-detail">${bc.Safe[a]} safe ${bc.Lean[a]} lean ${bc['Toss-up'][a]} toss-up</div>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    function renderSwing() {
+      const sw = summary.swing_seats || [];
+      const tu = summary.toss_ups || [];
+      const el = document.getElementById('swing-section');
+      el.innerHTML = `
+        <div class="swing-card">
+          <h3>Swing Seats</h3>
+          <div class="swing-count">${sw.length}</div>
+          <div class="swing-subtitle">Predicted to change hands from 2021</div>
+          <div class="swing-list">${sw.slice(0,10).map(s => `
+            <div class="swing-item" onclick="selectByName('${s.constituency}')">
+              <span>${s.constituency}</span>
+              <span class="swing-dir" style="color:${AC[s.to]}">${s.from}→${s.to}</span>
+            </div>`).join('')}
+            ${sw.length > 10 ? `<div class="swing-item" style="justify-content:center;color:var(--text-muted);font-size:0.75rem">+ ${sw.length - 10} more</div>` : ''}
+          </div>
+        </div>
+        <div class="swing-card">
+          <h3>Toss-up Seats</h3>
+          <div class="swing-count">${tu.length}</div>
+          <div class="swing-subtitle">Margin under 5% — could go either way</div>
+          <div class="swing-list">${tu.slice(0,10).map(s => `
+            <div class="swing-item" onclick="selectByName('${s.constituency}')">
+              <span>${s.constituency}</span>
+              <span class="swing-dir" style="color:${AC[s.predicted]}">${s.predicted} +${s.margin.toFixed(1)}%</span>
+            </div>`).join('')}
+            ${tu.length > 10 ? `<div class="swing-item" style="justify-content:center;color:var(--text-muted);font-size:0.75rem">+ ${tu.length - 10} more</div>` : ''}
+          </div>
+        </div>`;
+    }
+
+    function selectByName(name) {
+      const p = predictions.find(x => x.constituency === name);
+      if (p) selectConstituency(p.number);
+    }
+
+    function getFiltered() {
+      let list = [...predictions];
+      if (filterAlliance !== 'All') list = list.filter(p => p.predictedWinner === filterAlliance);
+      if (filterConf !== 'All') list = list.filter(p => p.confidence === filterConf);
+      if (filterDistrict !== 'All') list = list.filter(p => p.district === filterDistrict);
+      if (searchQ) {
+        const q = searchQ.toLowerCase();
+        list = list.filter(p => p.constituency.toLowerCase().includes(q) || p.district.toLowerCase().includes(q));
+      }
+      list.sort((a, b) => {
+        let va = a[sortKey], vb = b[sortKey];
+        if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        return sortAsc ? va - vb : vb - va;
+      });
+      return list;
+    }
+
+    function renderTable() {
+      const districts = [...new Set(predictions.map(p => p.district))].sort();
+      const filtered = getFiltered();
+      const el = document.getElementById('table-section');
+      el.innerHTML = `
+        <h2>All 140 Constituencies</h2>
+        <div class="filters">
+          <input type="text" placeholder="Search constituency or district..." oninput="searchQ=this.value;renderTable()" value="${searchQ}">
+          <select onchange="filterAlliance=this.value;renderTable()">
+            <option value="All">All Alliances</option>
+            <option value="LDF" ${filterAlliance==='LDF'?'selected':''}>LDF</option>
+            <option value="UDF" ${filterAlliance==='UDF'?'selected':''}>UDF</option>
+            <option value="NDA" ${filterAlliance==='NDA'?'selected':''}>NDA</option>
+          </select>
+          <select onchange="filterConf=this.value;renderTable()">
+            <option value="All">All Confidence</option>
+            <option value="Safe" ${filterConf==='Safe'?'selected':''}>Safe</option>
+            <option value="Lean" ${filterConf==='Lean'?'selected':''}>Lean</option>
+            <option value="Toss-up" ${filterConf==='Toss-up'?'selected':''}>Toss-up</option>
+          </select>
+          <select onchange="filterDistrict=this.value;renderTable()">
+            <option value="All">All Districts</option>
+            ${districts.map(d => `<option value="${d}" ${filterDistrict===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div class="count-label">${filtered.length} constituencies</div>
+        <table class="pred-table">
+          <thead><tr>
+            <th onclick="toggleSort('number')"># ${sortIcon('number')}</th>
+            <th onclick="toggleSort('constituency')">Constituency ${sortIcon('constituency')}</th>
+            <th onclick="toggleSort('district')">District ${sortIcon('district')}</th>
+            <th>Predicted</th>
+            <th>Vote Share</th>
+            <th onclick="toggleSort('predictedMargin')">Margin ${sortIcon('predictedMargin')}</th>
+            <th>Confidence</th>
+            <th>History</th>
+          </tr></thead>
+          <tbody>${filtered.map(p => `
+            <tr onclick="selectConstituency(${p.number})" class="${selected===p.number?'active-row':''}">
+              <td>${p.number}</td>
+              <td><strong>${p.constituency}</strong></td>
+              <td>${p.district}</td>
+              <td><span class="ct-badge" style="background:${AC[p.predictedWinner]}">${p.predictedWinner}</span></td>
+              <td><div class="mini-bars">
+                <div class="mini-bar" style="width:${p.ldfScore}%;background:${AC.LDF}"></div>
+                <div class="mini-bar" style="width:${p.udfScore}%;background:${AC.UDF}"></div>
+                <div class="mini-bar" style="width:${p.ndaScore}%;background:${AC.NDA}"></div>
+              </div></td>
+              <td>${p.predictedMargin.toFixed(1)}%</td>
+              <td><span class="conf-badge ${CONF_CLS[p.confidence]}">${p.confidence}</span></td>
+              <td style="font-size:0.7rem">${historyDots(p)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    function sortIcon(key) { return sortKey === key ? (sortAsc ? '↑' : '↓') : ''; }
+    function toggleSort(key) { if (sortKey === key) sortAsc = !sortAsc; else { sortKey = key; sortAsc = true; } renderTable(); }
+
+    function historyDots(p) {
+      const items = [];
+      if (p.winner2011) items.push(`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${AC[p.winner2011]||'#999'}"></span>`);
+      if (p.winner2016) items.push(`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${AC[p.winner2016]||'#999'}"></span>`);
+      if (p.winner2021) items.push(`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${AC[p.winner2021]||'#999'}"></span>`);
+      if (p.lokWinner2024) items.push(`<span style="margin-left:4px;display:inline-block;width:10px;height:10px;border-radius:50%;background:${AC[p.lokWinner2024]||'#999'}"></span>`);
+      return items.join(' ');
+    }
+
+    function renderDistricts() {
+      const bd = summary.by_district || {};
+      const sorted = Object.entries(bd).sort((a,b) => a[0].localeCompare(b[0]));
+      const el = document.getElementById('district-section');
+      el.innerHTML = `
+        <h2>District Breakdown</h2>
+        <div class="district-grid">
+          ${sorted.map(([name, tally]) => {
+            const total = tally.LDF + tally.UDF + tally.NDA;
+            return `<div class="district-row">
+              <div class="district-name">${name}</div>
+              <div class="district-bar">
+                ${tally.LDF ? `<div class="district-bar-seg" style="flex:${tally.LDF};background:${AC.LDF}">${tally.LDF}</div>` : ''}
+                ${tally.UDF ? `<div class="district-bar-seg" style="flex:${tally.UDF};background:${AC.UDF}">${tally.UDF}</div>` : ''}
+                ${tally.NDA ? `<div class="district-bar-seg" style="flex:${tally.NDA};background:${AC.NDA}">${tally.NDA}</div>` : ''}
+              </div>
+              <div class="district-total">${total}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function selectConstituency(num) {
+      selected = selected === num ? null : num;
+      renderCard();
+      renderTable();
+      colorMap();
+    }
+
+    function renderCard() {
+      const wrap = document.getElementById('card-wrap');
+      if (!selected) {
+        wrap.innerHTML = `<div class="card-placeholder"><div class="cp-icon">🗺️</div><div class="cp-text">Click a constituency on the map or table to see detailed prediction</div></div>`;
+        return;
+      }
+      const p = predictions.find(x => x.number === selected);
+      if (!p) return;
+      const cf = p.combinedFactors || {};
+      const survC = cf.surveyScore >= 7 ? '#22c55e' : cf.surveyScore >= 5 ? '#eab308' : '#ef4444';
+      const survIcon = cf.surveyScore >= 8 ? '⭐' : cf.surveyScore >= 6 ? '👍' : '👎';
+      const adjColor = cf.surveyAdj > 0 ? '#22c55e' : cf.surveyAdj < 0 ? '#ef4444' : '#888';
+
+      wrap.innerHTML = `
+        <div class="card-content" style="position:relative">
+          <button class="cc-close" onclick="selectConstituency(null)">✕</button>
+          <div class="cc-header">
+            <div>
+              <div class="cc-name-row"><span class="cc-number">#${p.number}</span> <span class="cc-name">${p.constituency}</span></div>
+              <div class="cc-district">${p.district}</div>
+            </div>
+            <span class="cc-badge" style="background:${AC[p.predictedWinner]}">${p.predictedWinner}</span>
+          </div>
+          <div class="cc-votes">
+            ${['LDF','UDF','NDA'].map(a => `
+              <div class="cc-vote-row">
+                <span class="cc-vote-label" style="color:${AC[a]}">${a}</span>
+                <div class="cc-vote-bar-bg"><div class="cc-vote-bar" style="width:${p[a.toLowerCase()+'Score']}%;background:${AC[a]}"></div></div>
+                <span class="cc-vote-pct">${p[a.toLowerCase()+'Score'].toFixed(1)}%</span>
+              </div>`).join('')}
+          </div>
+          <div class="cc-meta">
+            <span>Margin <strong>${p.predictedMargin.toFixed(1)}%</strong></span>
+            <span>Confidence <span class="conf-badge ${CONF_CLS[p.confidence]}">${p.confidence}</span></span>
+          </div>
+          <div class="cc-section-label">Election History</div>
+          <div class="history-pills">
+            ${p.winner2011 ? `<span class="history-year">2011</span><span class="history-pill" style="background:${AC[p.winner2011]}">${p.winner2011}</span>` : ''}
+            ${p.winner2016 ? `<span class="history-year">2016</span><span class="history-pill" style="background:${AC[p.winner2016]}">${p.winner2016}</span>` : ''}
+            ${p.winner2021 ? `<span class="history-year">2021</span><span class="history-pill" style="background:${AC[p.winner2021]}">${p.winner2021}</span>` : ''}
+            ${p.lokWinner2024 ? `<span class="history-sep">│</span><span class="history-year">LS '24</span><span class="history-pill" style="background:${AC[p.lokWinner2024]}">${p.lokWinner2024}</span>` : ''}
+          </div>
+          ${cf.surveyScore ? `
+          <div class="survey-section">
+            <div class="cc-section-label" style="margin-top:0">📋 Reporter TV Public Survey</div>
+            <div class="survey-header">
+              <span class="survey-name">${cf.mlaName || 'Incumbent MLA'}</span>
+              <span class="survey-badge" style="background:${survC}">${survIcon} ${cf.surveyScore.toFixed(1)}/10</span>
+            </div>
+            <div class="survey-stats">
+              <div class="survey-stat">
+                <span class="survey-stat-val">${cf.surveyScore.toFixed(1)}</span>
+                <span class="survey-stat-label">Score</span>
+              </div>
+              <div class="survey-stat">
+                <span class="survey-stat-val">#${cf.surveyRank}</span>
+                <span class="survey-stat-label">Rank / 140</span>
+              </div>
+              <div class="survey-stat">
+                <span class="survey-stat-val" style="color:${adjColor}">${cf.surveyAdj > 0 ? '+' : ''}${cf.surveyAdj.toFixed(1)}%</span>
+                <span class="survey-stat-label">Impact</span>
+              </div>
+            </div>
+            <div class="survey-bar-bg"><div class="survey-bar" style="width:${cf.surveyScore*10}%;background:${survC}"></div></div>
+          </div>` : ''}
+        </div>`;
+    }
+
+    async function loadMap() {
+      try {
+        const res = await fetch('data/kla-map.svg');
+        let svgText = await res.text();
+        svgText = svgText.replace(/<style>.*?<\/style>/s, '');
+        const container = document.getElementById('map-container');
+        container.innerHTML = svgText;
+        const tooltip = document.getElementById('map-tooltip');
+
+        container.querySelectorAll('path').forEach(path => {
+          const qid = path.getAttribute('data-qid');
+          path.addEventListener('mouseenter', () => {
+            const row = predByQid[qid];
+            if (row && tooltip) {
+              tooltip.innerHTML = `<strong>#${row.number} ${row.constituency}</strong><br><span style="color:${AC[row.predictedWinner]}">${row.predictedWinner}</span> · ${row.confidence} · margin ${row.predictedMargin.toFixed(1)}%`;
+              tooltip.style.display = 'block';
+            }
+          });
+          path.addEventListener('mousemove', (e) => {
+            if (tooltip) { tooltip.style.left = (e.clientX + 14) + 'px'; tooltip.style.top = (e.clientY - 8) + 'px'; }
+          });
+          path.addEventListener('mouseleave', () => { if (tooltip) tooltip.style.display = 'none'; });
+          path.addEventListener('click', () => {
+            const row = predByQid[qid];
+            if (row) selectConstituency(row.number);
+          });
+        });
+        colorMap();
+      } catch (e) { console.error('Map load error:', e); }
+    }
+
+    function colorMap() {
+      const container = document.getElementById('map-container');
+      if (!container) return;
+      container.querySelectorAll('path').forEach(path => {
+        const qid = path.getAttribute('data-qid');
+        const row = predByQid[qid];
+        if (row) {
+          path.style.fill = AC[row.predictedWinner] || '#999';
+          path.style.opacity = OPC[row.confidence] || 0.5;
+          path.style.stroke = '#232323';
+          path.style.strokeWidth = '0.003';
+          if (selected && row.number === selected) {
+            path.style.stroke = '#ffd700';
+            path.style.strokeWidth = '0.015';
+            path.style.opacity = '1';
+          }
+        } else {
+          path.style.fill = '#9ca3af';
+          path.style.opacity = '0.3';
+        }
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
